@@ -1,5 +1,6 @@
 import ChatWindow from "./components/ChatWindow";
 import { useMediaQuery } from 'react-responsive';
+import './App.css';
 
 function App() {
   const isSmall = useMediaQuery({maxWidth:600})

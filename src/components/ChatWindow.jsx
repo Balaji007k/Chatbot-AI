@@ -6,6 +6,7 @@ export default function ChatWindow() {
   const [messages, setMessages] = useState([
     { text: "Hi there! How can I help you?", sender: "bot" },
   ]);
+  const [Loading,setLoading] = useState(false);
   const [input, setInput] = useState("");
   const chatEndRef = useRef(null);
 
@@ -14,6 +15,12 @@ export default function ChatWindow() {
 
   const newMessage = { text: input, sender: "user" };
   setMessages((prev) => [...prev, newMessage]);
+
+  // Show "Thinking..." message from bot
+  const thinkingMessage = { text: "Thinking...", sender: "bot", id: "thinking" };
+  setMessages((prev) => [...prev, thinkingMessage]);
+
+  setInput("");
 
   try {
     const response = await fetch(
@@ -32,17 +39,24 @@ export default function ChatWindow() {
     const reply =
       data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response";
 
-    setMessages((prev) => [...prev, { text: reply, sender: "bot" }]);
+    // Replace the "Thinking..." message with actual reply
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === "thinking" ? { text: reply, sender: "bot" } : msg
+      )
+    );
   } catch (error) {
     console.error("Fetch error:", error);
-    setMessages((prev) => [
-      ...prev,
-      { text: "Error contacting Gemini API", sender: "bot" },
-    ]);
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === "thinking"
+          ? { text: "Error contacting Gemini API", sender: "bot" }
+          : msg
+      )
+    );
   }
-
-  setInput("");
 };
+
 
 
 
@@ -61,7 +75,7 @@ export default function ChatWindow() {
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((msg, idx) => (
-          <MessageBubble key={idx} text={msg.text} sender={msg.sender} />
+          <MessageBubble key={idx} text={msg.text} sender={msg.sender} Loading={Loading} messages={messages}/>
         ))}
         <div ref={chatEndRef} />
       </div>
