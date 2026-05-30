@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
+import React from "react";
 
-export default function MessageBubble({ text, sender }) {
+const MessageBubble = React.memo(({ text, sender }) => {
   const isUser = sender === "user";
   const isThinking = text === "Thinking...";
 
@@ -23,4 +24,6 @@ export default function MessageBubble({ text, sender }) {
       </div>
     </div>
   );
-}
+})
+
+export default React.memo(MessageBubble);

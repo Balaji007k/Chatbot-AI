@@ -3,10 +3,12 @@ import MessageBubble from "./MessageBubble";
 
 export default function ChatWindow() {
   const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
   const [messages, setMessages] = useState([
     { text: "Hi there! How can I help you?", sender: "bot" },
   ]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const chatEndRef = useRef(null);
 
@@ -88,75 +90,82 @@ export default function ChatWindow() {
   return processed.join("\n\n").trim();
 };
 
-
-
-
-
-
-
-
   const handleSend = async () => {
-    if (input.trim() === "") return;
+  if (input.trim() === "") return;
 
-    const newMessage = { text: input, sender: "user" };
-    const updatedMessages = [...messages, newMessage];
+    // Prevent multiple clicks while waiting
+    setLoading(true);
+  if (messages.some(msg => msg.id === "thinking")) return;
 
-    // Temporarily add "Thinking..." bot placeholder
-    setMessages([...updatedMessages, { text: "Thinking...", sender: "bot", id: "thinking" }]);
-    setInput("");
+  const newMessage = { text: input, sender: "user" };
+  const updatedMessages = [...messages, newMessage];
 
-    // Extract the last 3 exchanges (user+bot pairs)
-    const lastMessages = [];
-    let count = 0;
-    for (let i = updatedMessages.length - 1; i >= 0 && count < 6; i--) {
-      lastMessages.unshift(updatedMessages[i]);
-      if (updatedMessages[i].sender === "bot") count++;
+  setMessages([
+    ...updatedMessages,
+    { text: "Thinking...", sender: "bot", id: "thinking" }
+  ]);
+  setInput("");
+
+  const lastMessages = updatedMessages.slice(-6);
+
+  const formattedMessages = lastMessages.map((msg) => ({
+    role: msg.sender === "user" ? "user" : "model",
+    parts: [{ text: msg.text }],
+  }));
+
+  try {
+
+    //https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`
+ 
+    const response = await fetch(
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${API_KEY}`,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: formattedMessages,
+    }),
+  }
+);
+
+    if (response.status === 429) {
+      throw new Error("Rate limit exceeded. Please wait a minute and try again.");
     }
 
-    // Format for Gemini API
-    const formattedMessages = lastMessages.map((msg) => ({
-      role: msg.sender === "user" ? "user" : "model",
-      parts: [{ text: msg.text }],
-    }));
-
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: formattedMessages,
-          }),
-        }
-      );
-
-      const data = await response.json();
-      const reply =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response";
-
-      // Format the reply into bullets or line breaks
-      const formattedReply = formatBotReply(reply);
-
-      // Replace "Thinking..." with actual bot reply
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === "thinking" ? { text: formattedReply, sender: "bot" } : msg
-        )
-      );
-
-    } catch (error) {
-      console.error("Fetch error:", error);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === "thinking"
-            ? { text: "Error contacting Gemini API", sender: "bot" }
-            : msg
-        )
-      );
+    if (!response.ok) {
+      throw new Error("Something went wrong. Try again later.");
     }
-  };
 
+    const data = await response.json();
+
+    const reply =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Sorry, I couldn't generate a response.";
+
+    const formattedReply = formatBotReply(reply);
+
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === "thinking"
+          ? { text: formattedReply, sender: "bot" }
+          : msg
+      )
+    );
+
+  } catch (error) {
+    console.error("Fetch error:", error.message);
+
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === "thinking"
+          ? { text: error.message, sender: "bot" }
+          : msg
+      )
+    );
+  }finally {
+    setLoading(false);
+  }
+};
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") handleSend();
@@ -190,7 +199,7 @@ export default function ChatWindow() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-1 p-3 border rounded-full focus:outline-none"
+          className="flex-1 p-3 border rounded-full focus:outline-none cursor-text caret-black"
           placeholder="Type your message..."
         />
 
@@ -205,11 +214,11 @@ export default function ChatWindow() {
         </button>
 
         {/* Send Button */}
-        <button
+        <button disabled={loading}
           onClick={handleSend}
           className="px-4 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition"
         >
-          Send
+          {loading ? "Sending..." : "Send"}
         </button>
       </div>
     </div>
